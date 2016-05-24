@@ -22,8 +22,6 @@ var logger = log4js.getLogger('application');
 var app = express();
 var http = require('http');
 
-var manager = require('./account');
-
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
@@ -38,7 +36,7 @@ var appEnv = cfenv.getAppEnv();
 app.listen(appEnv.port, '0.0.0.0', function () {
 
     // print a message when the server starts listening
-    logger.info("server starting on " + appEnv.url);
+    console.log("server starting on " + appEnv.url);
 
     //Home page
     app.get("/", function (req, res) {
@@ -55,62 +53,31 @@ app.listen(appEnv.port, '0.0.0.0', function () {
         });
     })
 
+
     //member page
     app.get("/member", function (req, res) {
-
-        var name = req.query.name;
-        var id = req.query.id;
-
-        var db = cloudant.db.use("insurance");
-
-        db.list(function (err, body) {
-
-            if (err) {
-                logger.error(err);
-            } else {
-
-                var rows = body.rows;
-                var count = rows.length;
-
-                logger.info("Number of accounts: " + count);
-
-                var item;
-
-                /* TODO: should be able to use a find method here */
-
-                rows.forEach(function (account) {
-                    db.get(account.id, {
-                        revs_info: true
-                    }, function (err, doc) {
-
-                        if (doc.name === name && doc.id === id) {
-
-                            res.render('member', {
-                                title: 'Policy Member',
-                                page: 'member',
-                                memberData: doc
-                            });
-                        }
-                    })
-                })
+        db.find({
+            selector: {
+                payer_name: (!req.query.payername) ? 'Tom Murphy' : req.query.payername
             }
-        })
+        }, function (er, result) {
+            if (er) {
+                throw er;
+            }
+
+            console.log('Found %d documents', result.docs.length);
+            for (var i = 0; i < result.docs.length; i++) {
+                //console.log('  Doc id: %s', result.docs[i]._id);
+
+                res.render('member', {
+                    title: 'Policy Member',
+                    page: 'member',
+                    memberData: result.docs[i]
+                });
+            }
+        });
+
     });
-
-
-    app.param('id', function (req, res, next, id) {
-
-        /* Facebook creds come in like this: id~name */
-
-        var components = id.split('~')
-
-        var identifier = components[0];
-        var name = components[1];
-
-        manager.findAccount(identifier, name, res, manager.handleAccountOutcome);
-    });
-
-    app.get("/person/:id", function (req, res) {});
 
     //health page
     app.get("/health", function (req, res) {
@@ -206,7 +173,7 @@ app.listen(appEnv.port, '0.0.0.0', function () {
         var env = JSON.parse(process.env.VCAP_SERVICES);
         var host = process.env.VCAP_APP_HOST;
         var port = process.env.VCAP_APP_PORT;
-        //        console.log('VCAP_SERVICES: %s', process.env.VCAP_SERVICES);
+        console.log('VCAP_SERVICES: %s', process.env.VCAP_SERVICES);
         // Also parse Cloudant settings.
         var credentials = env['cloudantNoSQLDB'][0]['credentials'];
         username = credentials.username;
@@ -262,6 +229,7 @@ app.listen(appEnv.port, '0.0.0.0', function () {
 
     });
 
+
     //Quering with a query string
     // localhost:6001/insurance/query?payername=John+Appleseed -- pass a payername as query string.
     // localhost: 6001 / insurance / query -- Will pick default user for now.
@@ -285,4 +253,6 @@ app.listen(appEnv.port, '0.0.0.0', function () {
 
         });
     });
+
+
 });
